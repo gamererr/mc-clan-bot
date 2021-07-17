@@ -1,14 +1,20 @@
 import discord
 from discord.ext import commands
+from extra import *
+from dotenv import dotenv_values
 
 intents = discord.Intents.all()
 client = commands.Bot(command_prefix='clan ', intents=intents)
 
+
+config = DotDict({
+	**vars(dotenv_values('example.env'))
+	**vars(dotenv_values('.env'))
+})
+
 @client.event
 async def on_ready():
 	print(f"hello world")
-
-with open("tokenfile", "r") as tokenfile: token=tokenfile.read()
 
 # VVVVVV commands VVVVVV'
 
@@ -21,8 +27,8 @@ async def make(ctx, name, *color):
 			colortemp.append(int(x))
 		color = discord.Colour.from_rgb(int(color[0]), int(color[1]), int(color[2]))
 
-	inClan:discord.Role = ctx.guild.get_role(865713278860656661)
-	leader:discord.Role = ctx.guild.get_role(865992562364252163)
+	inClan:discord.Role = ctx.guild.get_role(config.INCLAN)
+	leader:discord.Role = ctx.guild.get_role(config.LEADER)
 
 	if inClan in ctx.author.roles:
 		await ctx.send("you are already in a clan, leave to make a clan")
@@ -35,7 +41,7 @@ async def make(ctx, name, *color):
 	await ctx.author.add_roles(role)
 	await ctx.author.add_roles(leader)
 
-	clans:discord.CategoryChannel = ctx.guild.get_channel(865650519434461206)
+	clans:discord.CategoryChannel = ctx.guild.get_channel(config.CLANS)
 
 	channel:discord.TextChannel = await clans.create_text_channel(name=name, overwrites={ctx.guild.default_role:discord.PermissionOverwrite(view_channel=False),role:discord.PermissionOverwrite(view_channel=True)})
 
@@ -44,9 +50,9 @@ async def make(ctx, name, *color):
 @client.command()
 async def leave(ctx):
 	
-	inClan:discord.Role = ctx.guild.get_role(865713278860656661)
-	clanBorder:discord.Role = ctx.guild.get_role(865819163087994911)
-	leader:discord.Role = ctx.guild.get_role(865992562364252163)
+	inClan:discord.Role = ctx.guild.get_role(config.CLANS)
+	clanBorder:discord.Role = ctx.guild.get_role(config.CLANBORDER)
+	leader:discord.Role = ctx.guild.get_role(config.LEADER)
 
 	for x in ctx.guild.roles:
 		if x in ctx.author.roles and x.position <= clanBorder.position and x.position != 0:
@@ -70,10 +76,9 @@ async def leave(ctx):
 async def remove(ctx, role):
 
 	role:discord.Role = ctx.message.role_mentions[0]
-	inClan:discord.Role = ctx.guild.get_role(865713278860656661)
-	clanBorder:discord.Role = ctx.guild.get_role(865819163087994911)
-	leader:discord.Role = ctx.guild.get_role(865992562364252163)
-
+	inClan:discord.Role = ctx.guild.get_role(config.INCLAN)
+	clanBorder:discord.Role = ctx.guild.get_role(config.CLANBORDER)
+	leader:discord.Role = ctx.guild.get_role(config.LEADER)
 	if ctx.channel.permissions_for(ctx.author).manage_guild:
 		for x in ctx.guild.roles:
 			if x == role and x.position <= clanBorder.position and x.position != 0:
@@ -92,8 +97,8 @@ async def transfer(ctx, newOwner):
 
 	newOwner = ctx.mentions[0]
 
-	leader:discord.Role = ctx.guild.get_role(865992562364252163)
-	clanBorder:discord.Role = ctx.guild.get_role(865819163087994911)
+	leader:discord.Role = ctx.guild.get_role(config.LEADER)
+	clanBorder:discord.Role = ctx.guild.get_role(config.CLANBORDER)
 
 	if not leader in ctx.author.roles:
 		return
@@ -119,9 +124,9 @@ async def kick(ctx, kicked):
 
 	kicked = ctx.message.mentions[0]
 
-	leader:discord.Role = ctx.guild.get_role(865992562364252163)
-	inClan:discord.Role = ctx.guild.get_role(865713278860656661)
-	clanBorder:discord.Role = ctx.guild.get_role(865819163087994911)
+	leader:discord.Role = ctx.guild.get_role(config.LEADER)
+	inClan:discord.Role = ctx.guild.get_role(config.INCLAN)
+	clanBorder:discord.Role = ctx.guild.get_role(config.CLANBORDER)
 
 	if ctx.author == kicked or not leader in ctx.author.roles:
 		return
@@ -142,4 +147,4 @@ async def kick(ctx, kicked):
 		await ctx.send(f"kicked {kicked.display_name} from {clan.name}")
 
 
-client.run(token)
+client.run(config.TOKEN,bot=config.BOT)
