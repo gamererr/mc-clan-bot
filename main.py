@@ -60,7 +60,30 @@ async def leave(ctx):
 
 	await ctx.send(f"you left clan {left.name}")
 
-	
+@client.command()
+async def remove(ctx, role):
+	role = role.replace("<", "")
+	role = role.replace(">", "")
+	role = role.replace("&", "")
+	role = role.replace("@", "")
+
+	role:discord.Role = ctx.guild.get_role(int(role))
+	inClan:discord.Role = ctx.guild.get_role(865713278860656661)
+	clanBorder:discord.Role = ctx.guild.get_role(865819163087994911)
+
+	if ctx.channel.permissions_for(ctx.author).administrator:
+		for x in ctx.guild.roles:
+			if x == role and x.position <= clanBorder.position and x.position != 0:
+				await ctx.send(f"removing clan {x}...")
+				role = x
+				break
+
+		tempCount = 0
+		for x in role.members:
+			await x.remove_roles(inClan)
+			tempCount += 1
+		await role.delete()
+		await ctx.send(f"done! clan had {tempCount} members")
 
 
 client.run(token)
