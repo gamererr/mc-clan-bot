@@ -74,7 +74,7 @@ async def remove(ctx, role):
 	clanBorder:discord.Role = ctx.guild.get_role(865819163087994911)
 	leader:discord.Role = ctx.guild.get_role(865992562364252163)
 
-	if ctx.channel.permissions_for(ctx.author).administrator:
+	if ctx.channel.permissions_for(ctx.author).manage_guild:
 		for x in ctx.guild.roles:
 			if x == role and x.position <= clanBorder.position and x.position != 0:
 				await ctx.send(f"removing clan {x}...")
