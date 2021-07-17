@@ -1,2 +1,4 @@
 tokenfile
 .vscode
+__pycache__
+.env
