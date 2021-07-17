@@ -22,6 +22,7 @@ async def make(ctx, name, *color):
 		color = discord.Colour.from_rgb(int(color[0]), int(color[1]), int(color[2]))
 
 	inClan:discord.Role = ctx.guild.get_role(865713278860656661)
+	leader:discord.Role = ctx.guild.get_role(865992562364252163)
 
 	if inClan in ctx.author.roles:
 		await ctx.send("you are already in a clan, leave to make a clan")
@@ -32,6 +33,7 @@ async def make(ctx, name, *color):
 
 	role:discord.Role = await ctx.guild.create_role(name=name, colour=color)
 	await ctx.author.add_roles(role)
+	await ctx.author.add_roles(leader)
 
 	clans:discord.CategoryChannel = ctx.guild.get_channel(865650519434461206)
 
@@ -44,32 +46,33 @@ async def leave(ctx):
 	
 	inClan:discord.Role = ctx.guild.get_role(865713278860656661)
 	clanBorder:discord.Role = ctx.guild.get_role(865819163087994911)
-
-	if inClan in ctx.author.roles:
-		await ctx.send("leaving clan...")
-	else:
-		await ctx.send("you are not in a clan")
-		return
+	leader:discord.Role = ctx.guild.get_role(865992562364252163)
 
 	for x in ctx.guild.roles:
 		if x in ctx.author.roles and x.position <= clanBorder.position and x.position != 0:
-			print(x)
-			await ctx.author.remove_roles(x)
-			await ctx.author.remove_roles(inClan)
-			left = x
+			leaving = x
 
-	await ctx.send(f"you left clan {left.name}")
+	if leader in ctx.author.roles and len(leaving.members) != 1:
+		await ctx.send("you own your clan, transfer it to leave")
+		return
+	elif inClan in ctx.author.roles:
+		await ctx.send(f"you left clan {leaving.name}")
+	elif inClan not in ctx.author.roles:
+		await ctx.send("you are not in a clan")
+		return
+
+	
+	await ctx.author.remove_roles(leaving)
+	await ctx.author.remove_roles(inClan)
+	await ctx.author.remove_roles(leader)
 
 @client.command()
 async def remove(ctx, role):
-	role = role.replace("<", "")
-	role = role.replace(">", "")
-	role = role.replace("&", "")
-	role = role.replace("@", "")
 
-	role:discord.Role = ctx.guild.get_role(int(role))
+	role:discord.Role = ctx.message.mentions[0]
 	inClan:discord.Role = ctx.guild.get_role(865713278860656661)
 	clanBorder:discord.Role = ctx.guild.get_role(865819163087994911)
+	leader:discord.Role = ctx.guild.get_role(865992562364252163)
 
 	if ctx.channel.permissions_for(ctx.author).administrator:
 		for x in ctx.guild.roles:
@@ -78,12 +81,31 @@ async def remove(ctx, role):
 				role = x
 				break
 
-		tempCount = 0
 		for x in role.members:
 			await x.remove_roles(inClan)
-			tempCount += 1
+			await x.remove_roles(leader)
+		await ctx.send(f"done! clan had {len(role.members)} members")
 		await role.delete()
-		await ctx.send(f"done! clan had {tempCount} members")
 
+@client.command()
+async def transfer(ctx, newOwner):
+
+	newOwner = ctx.mentions[0]
+
+	leader:discord.Role = ctx.guild.get_role(865992562364252163)
+
+	for x in ctx.guild.roles:
+		if x in ctx.author.roles and x in newOwner.roles and x.position <= clanBorder.position and x.position != 0:
+			clan = x
+			break
+		else:
+			clan = None
+		
+		if clan == None:
+			await ctx.send(f"you and {newOwner.display_name} arent in the same clan")
+			return
+		else:
+			await ctx.author.remove_roles(leader)
+			await newOwner.add_roles(leader)
 
 client.run(token)
