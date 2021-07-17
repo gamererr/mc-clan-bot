@@ -1,9 +1,10 @@
 import discord
 from discord.ext import commands
 import asyncio
+import extra
 
 intents = discord.Intents.all()
-client = commands.Bot(command_prefix='clan ', intents=intents)
+client = commands.Bot(command_prefix='clan ', intents=intents, help_command=extra.MyHelpCommand())
 
 @client.event
 async def on_ready():
@@ -13,7 +14,7 @@ with open("tokenfile", "r") as tokenfile: token=tokenfile.read()
 
 # VVVVVV commands VVVVVV'
 
-@client.command()
+@client.command(aliases=["m"], brief="make a clan, duh")
 async def make(ctx, name, *color):
 	if color == []: color = discord.Colour.default()
 	else:
@@ -42,7 +43,7 @@ async def make(ctx, name, *color):
 
 	await ctx.send(f"made clan {role.mention}")
 
-@client.command()
+@client.command(aliases=["l"], brief="leave a clan, obviously")
 async def leave(ctx):
 	
 	inClan:discord.Role = ctx.guild.get_role(865713278860656661)
@@ -67,7 +68,7 @@ async def leave(ctx):
 	await ctx.author.remove_roles(inClan)
 	await ctx.author.remove_roles(leader)
 
-@client.command()
+@client.command(aliases=["r"], brief="admin only, delete a clan")
 async def remove(ctx, role):
 
 	role:discord.Role = ctx.message.role_mentions[0]
@@ -88,7 +89,7 @@ async def remove(ctx, role):
 		await ctx.send(f"done! clan had {len(role.members)} members")
 		await role.delete()
 
-@client.command()
+@client.command(aliases=["t"], brief="transfer ownership of a clan")
 async def transfer(ctx, newOwner):
 
 	newOwner = ctx.mentions[0]
@@ -115,7 +116,7 @@ async def transfer(ctx, newOwner):
 		await newOwner.add_roles(leader)
 		await ctx.send(f"transfered ownership of {clan.name} to {newOwner.display_name}")
 
-@client.command()
+@client.command(aliases=["k"], brief="kick a member from a clan")
 async def kick(ctx, kicked):
 
 	kicked = ctx.message.mentions[0]
@@ -143,7 +144,7 @@ async def kick(ctx, kicked):
 		await kicked.remove_roles(inClan)
 		await ctx.send(f"kicked {kicked.display_name} from {clan.name}")
 
-@client.command()
+@client.command(aliases=["i"], brief="invite a user to your clan")
 async def invite(ctx, invitee):
 
 	
@@ -183,8 +184,5 @@ async def invite(ctx, invitee):
 		await invitee.send(f"you joined {invitedTo.name}!")
 		await invitee.add_roles(invitedTo)
 		await invitee.add_roles(inClan)
-
-
-	
 
 client.run(token)
