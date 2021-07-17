@@ -6,7 +6,7 @@ client = commands.Bot(command_prefix='clan ', intents=intents)
 
 @client.event
 async def on_ready():
-	print(f"logged in as {client.user}")
+	print(f"hello world")
 
 with open("tokenfile", "r") as tokenfile: token=tokenfile.read()
 
