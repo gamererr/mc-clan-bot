@@ -1,5 +1,6 @@
 import discord
 from discord.ext import commands
+import asyncio
 
 intents = discord.Intents.all()
 client = commands.Bot(command_prefix='clan ', intents=intents)
@@ -99,7 +100,7 @@ async def transfer(ctx, newOwner):
 		return
 
 	for x in ctx.guild.roles:
-		if x in ctx.author.roles and x in newOwner.roles and x.position <= clanBorder.position and x.position != -1:
+		if x in ctx.author.roles and x in newOwner.roles and x.position <= clanBorder.position and x.position != 0:
 			clan = x
 			break
 		else:
@@ -124,10 +125,11 @@ async def kick(ctx, kicked):
 	clanBorder:discord.Role = ctx.guild.get_role(865819163087994911)
 
 	if ctx.author == kicked or not leader in ctx.author.roles:
+		await ctx.send("you down own your clan")
 		return
 
 	for x in ctx.guild.roles:
-		if x in ctx.author.roles and x in kicked.roles and x.position == clanBorder.position:
+		if x in ctx.author.roles and x in kicked.roles and x.position <= clanBorder.position and x.position != 0:
 			clan = x
 			break
 		else:
@@ -141,5 +143,48 @@ async def kick(ctx, kicked):
 		await kicked.remove_roles(inClan)
 		await ctx.send(f"kicked {kicked.display_name} from {clan.name}")
 
+@client.command()
+async def invite(ctx, invitee):
+
+	
+	inClan:discord.Role = ctx.guild.get_role(865713278860656661)
+	clanBorder:discord.Role = ctx.guild.get_role(865819163087994911)
+	leader:discord.Role = ctx.guild.get_role(865992562364252163)
+
+	invitee = ctx.message.mentions[0]
+
+	if inClan in invitee.roles:
+		await ctx.send(f"{invitee.display_name} is already in a clan")
+		return
+	if not leader in ctx.author.roles:
+		await ctx.send("you do not own your clan")
+		return
+
+	for x in ctx.guild.roles:
+		if x in ctx.author.roles and x.position <= clanBorder.position and x.position != 0:
+			invitedTo = x
+	
+	await ctx.send(f"invited {invitee.display_name} to {invitedTo.name}!")
+	message = await invitee.send(f"{ctx.author.mention} invited you to thier guild, {invitedTo.name} do you accept?")
+
+	await message.add_reaction('👍')
+
+	def check(reaction, user):
+		return user == invitee and str(reaction.emoji) == '👍'
+
+	try:
+		reaction, user = await client.wait_for('reaction_add', timeout=3600, check=check)
+	except asyncio.TimeoutError:
+		await ctx.author.send(f"{invitee.display_name} didnt accept the invite in time")
+		await invitee.send("invite timed out")
+		return
+	else:
+		await ctx.author.send(f"{invitee.display_name} accepted the invite")
+		await invitee.send(f"you joined {invitedTo.name}!")
+		await invitee.add_roles(invitedTo)
+		await invitee.add_roles(inClan)
+
+
+	
 
 client.run(token)
