@@ -1,16 +1,42 @@
 import discord
 from discord.ext import commands
 import asyncio
+from dotenv import dotenv_values
 import extra
+import traceback
+import sys
 
 intents = discord.Intents.all()
 client = commands.Bot(command_prefix='clan ', intents=intents, help_command=extra.MyHelpCommand())
+
+config = extra.DotDict({
+	**dict(dotenv_values('example.env')),
+	**dict(dotenv_values('.env'))
+})
 
 @client.event
 async def on_ready():
 	print(f"hello world")
 
-with open("tokenfile", "r") as tokenfile: token=tokenfile.read()
+@client.event
+async def on_command_error(ctx:commands.Context, exception):
+	embed = discord.Embed(color=discord.Color.purple())
+	if isinstance(exception,commands.errors.MissingRequiredArgument):
+		embed.title = "You forgot an argument"
+		embed.description = f"The syntax to `{client.command_prefix}{ctx.invoked_with}` is `{client.command_prefix}{ctx.invoked_with} {ctx.command.signature}`."
+		await ctx.send(embed=embed)
+	elif isinstance(exception,commands.CommandNotFound):
+		embed.title = "Invalid command"
+		embed.description = f"The command you just tried to use is invalid. Use `{client.command_prefix}help` to see all commands."
+		await ctx.send(embed=embed)
+	elif isinstance(exception,commands.errors.NotOwner):
+		app_info = await client.application_info()
+		embed.title = "You do not have access to this command."
+		embed.description = f"You must be the owner of this discord bot ({app_info.owner.name})."
+		await ctx.send(embed=embed)
+	else:
+		print('Ignoring exception in command {}:'.format(ctx.command), file=sys.stderr)
+		traceback.print_exception(type(exception), exception, exception.__traceback__, file=sys.stderr)
 
 # VVVVVV commands VVVVVV'
 
@@ -185,4 +211,55 @@ async def invite(ctx, invitee):
 		await invitee.add_roles(invitedTo)
 		await invitee.add_roles(inClan)
 
-client.run(token)
+@client.command(aliases=['e'], brief="edit your clan")
+async def edit(ctx, option:extra.EditTypes, *edit):
+
+	leader:discord.Role = ctx.guild.get_role(865992562364252163)
+	inClan:discord.Role = ctx.guild.get_role(865713278860656661)
+	clanBorder:discord.Role = ctx.guild.get_role(865819163087994911)
+
+	for x in ctx.guild.roles:
+		if x in ctx.author.roles and x.position <= clanBorder.position and x.position != 0:
+			clan = x
+			break
+		else:
+			clan = False
+	
+	
+	if inClan not in ctx.author.roles:
+		await ctx.send("you are not in a clan")
+		return
+	elif leader not in ctx.author.roles:
+		await ctx.send("you do not own the clan you are in")
+		return
+	elif not clan:
+		await ("an error occured this is a bug so guess you are fucked")
+		return
+	
+	if option == "name":
+
+		name = " ".join(edit)
+
+		await clan.edit(name=name)
+		await ctx.send(f"edited your clan {clan.name} to its new name")
+
+	elif option == "color":
+		
+		color = discord.Colour.from_rgb(int(edit[0]), int(edit[1]), int(edit[2]))
+		
+		await clan.edit(colour=color)
+		
+		await ctx.send(f"edited clan {clan.name} to its new color")
+	else:
+		await ctx.send("you need to get a valid option to edit (either color or name)")
+		return
+
+@client.command(aliases=["li"],brief="lists clans")
+async def list(ctx:commands.Context):
+	clanBorder:discord.Role = ctx.guild.get_role(865819163087994911)
+
+	embed = discord.Embed(title="List of clans")
+	embed.description = "\n".join( [i.mention for i in ctx.guild.roles if i.position < clanBorder.position and i != ctx.guild.default_role and len(i.members) > 0 ] )
+	await ctx.send(embed=embed,allowed_mentions=discord.AllowedMentions.none())
+
+client.run(config.TOKEN,bot=config.BOT)

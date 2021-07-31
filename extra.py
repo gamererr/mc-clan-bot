@@ -2,6 +2,7 @@
 
 import discord
 from discord.ext import	commands
+from enum import Enum,auto
 
 class MyHelpCommand(commands.DefaultHelpCommand):
 	def __init__(self, **options):
@@ -44,3 +45,12 @@ class MyHelpCommand(commands.DefaultHelpCommand):
 		for page in self.paginator.pages:
 			e.description += page
 		await destination.send(embed=e)
+
+class DotDict(dict):
+	__getattr__ = dict.__getitem__
+	__setattr__ = dict.__setitem__
+	__delattr__ = dict.__delitem__
+
+class EditTypes(Enum):
+	EDIT = auto()
+	COLOR = auto()
