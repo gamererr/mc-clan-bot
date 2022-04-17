@@ -1,92 +1,87 @@
 import discord
-from discord.ext import commands
 import asyncio
 from dotenv import dotenv_values
 import extra
-import traceback
-import sys
 
 intents = discord.Intents.all()
-client = commands.Bot(command_prefix='clan ', intents=intents, help_command=extra.MyHelpCommand())
+client = discord.Bot()
 
-config = extra.DotDict({
+config = extra.config({
 	**dict(dotenv_values('example.env')),
 	**dict(dotenv_values('.env'))
 })
 
-@client.event
-async def on_ready():
-	print(f"hello world")
+clan_group = client.create_group("clan","Do things involving clans",guild_ids=[config.GUILD])
+edit_group = clan_group.create_subgroup("edit","Modify your clan in certain ways",)
+
+guild:discord.Guild = None
+inClan:discord.Role = None
+leader:discord.Role = None
+clans:discord.CategoryChannel = None
+clanBorder:discord.Role = None
 
 @client.event
-async def on_command_error(ctx:commands.Context, exception):
-	embed = discord.Embed(color=discord.Color.purple())
-	if isinstance(exception,commands.errors.MissingRequiredArgument):
-		embed.title = "You forgot an argument"
-		embed.description = f"The syntax to `{client.command_prefix}{ctx.invoked_with}` is `{client.command_prefix}{ctx.invoked_with} {ctx.command.signature}`."
-		await ctx.send(embed=embed)
-	elif isinstance(exception,commands.CommandNotFound):
-		embed.title = "Invalid command"
-		embed.description = f"The command you just tried to use is invalid. Use `{client.command_prefix}help` to see all commands."
-		await ctx.send(embed=embed)
-	elif isinstance(exception,commands.errors.NotOwner):
-		app_info = await client.application_info()
-		embed.title = "You do not have access to this command."
-		embed.description = f"You must be the owner of this discord bot ({app_info.owner.name})."
-		await ctx.send(embed=embed)
-	else:
-		print('Ignoring exception in command {}:'.format(ctx.command), file=sys.stderr)
-		traceback.print_exception(type(exception), exception, exception.__traceback__, file=sys.stderr)
+async def on_ready():
+	print(f"logged in as {client.user}")
+	global inClan, leader, clans, clanBorder, guild
+	guild = await client.fetch_guild(config.GUILD)
+	inClan = guild.get_role(config.INCLAN)
+	leader = guild.get_role(config.LEADER)
+	clanBorder = guild.get_role(config.CLANBORDER)
+	clans = await guild.fetch_channel(config.CLANS)
+	print(f"ready!")
+
+async def can_run_clan_command(ctx:discord.ApplicationContext):
+	if inClan not in ctx.author.roles:
+		raise extra.CheckFailedError
+	elif leader not in ctx.author.roles:
+		raise extra.CheckFailedError
+
+class InviteView(discord.ui.View):
+	def __init__(self,invitedTo,invitee):
+		self.invitedTo = invitedTo
+		self.invitee = invitee
+		super().__init__()
+
+	@discord.ui.button(label="Accept",style=discord.ButtonStyle.primary,emoji="✅")
+	async def accept_callback(self,button,interaction):
+		# await ctx.author.send(f"{self.invitee.display_name} accepted the invite")
+		await self.invitee.send(f"you joined {self.invitedTo.name}!")
+		await self.invitee.add_roles(self.invitedTo)
+		await self.invitee.add_roles(inClan)
+
+edit_group.checks.append(can_run_clan_command)
 
 # VVVVVV commands VVVVVV'
 
-@client.command(aliases=["m"], brief="make a clan, duh")
-async def make(ctx, name, *color):
-	if color == []: color = discord.Colour.default()
-	else:
-		colortemp = []
-		for x in color:
-			colortemp.append(int(x))
-		color = discord.Colour.from_rgb(int(color[0]), int(color[1]), int(color[2]))
-
-	inClan:discord.Role = ctx.guild.get_role(865713278860656661)
-	leader:discord.Role = ctx.guild.get_role(865992562364252163)
-
+@clan_group.command(description="make a clan")
+async def make(ctx:discord.ApplicationContext, name:discord.Option(str,"Name of the clan"), color:discord.Option(str,"color code in hex format") = None):
+	rgb_color = discord.Colour(int(color,16)) if color else discord.Colour.default()
 	if inClan in ctx.author.roles:
-		await ctx.send("you are already in a clan, leave to make a clan")
+		await ctx.respond("you are already in a clan, leave to make a clan",ephemeral=True)
 		return
-	else:
-		await ctx.send(f"making clan {name}")
-		await ctx.author.add_roles(inClan)
-
-	role:discord.Role = await ctx.guild.create_role(name=name, colour=color)
+	await ctx.author.add_roles(inClan)
+	role = await guild.create_role(name=name, colour=rgb_color)
 	await ctx.author.add_roles(role)
 	await ctx.author.add_roles(leader)
 
-	clans:discord.CategoryChannel = ctx.guild.get_channel(865650519434461206)
+	channel = await clans.create_text_channel(name=name, overwrites={guild.default_role:discord.PermissionOverwrite(view_channel=False),role:discord.PermissionOverwrite(view_channel=True)})
 
-	channel:discord.TextChannel = await clans.create_text_channel(name=name, overwrites={ctx.guild.default_role:discord.PermissionOverwrite(view_channel=False),role:discord.PermissionOverwrite(view_channel=True)})
+	await ctx.respond(f"made clan {role.mention}")
 
-	await ctx.send(f"made clan {role.mention}")
-
-@client.command(aliases=["l"], brief="leave a clan, obviously")
+@clan_group.command(description="leave a clan, obviously")
 async def leave(ctx):
-	
-	inClan:discord.Role = ctx.guild.get_role(865713278860656661)
-	clanBorder:discord.Role = ctx.guild.get_role(865819163087994911)
-	leader:discord.Role = ctx.guild.get_role(865992562364252163)
-
-	for x in ctx.guild.roles:
+	for x in guild.roles:
 		if x in ctx.author.roles and x.position <= clanBorder.position and x.position != 0:
 			leaving = x
 
 	if leader in ctx.author.roles and len(leaving.members) != 1:
-		await ctx.send("you own your clan, transfer it to leave")
+		await ctx.respond("you own your clan, transfer it to leave",ephemeral=True)
 		return
 	elif inClan in ctx.author.roles:
-		await ctx.send(f"you left clan {leaving.name}")
+		await ctx.respond(f"you left clan {leaving.name}",ephemeral=True)
 	elif inClan not in ctx.author.roles:
-		await ctx.send("you are not in a clan")
+		await ctx.respond("you are not in a clan",ephemeral=True)
 		return
 
 	
@@ -94,40 +89,32 @@ async def leave(ctx):
 	await ctx.author.remove_roles(inClan)
 	await ctx.author.remove_roles(leader)
 
-@client.command(aliases=["r"], brief="admin only, delete a clan")
+@clan_group.command(description="admin only, delete a clan")
 async def remove(ctx, role):
 
 	role:discord.Role = ctx.message.role_mentions[0]
-	inClan:discord.Role = ctx.guild.get_role(865713278860656661)
-	clanBorder:discord.Role = ctx.guild.get_role(865819163087994911)
-	leader:discord.Role = ctx.guild.get_role(865992562364252163)
 
 	if ctx.channel.permissions_for(ctx.author).manage_guild:
-		for x in ctx.guild.roles:
+		for x in guild.roles:
 			if x == role and x.position <= clanBorder.position and x.position != 0:
-				await ctx.send(f"removing clan {x}...")
+				# await ctx.respond(f"removing clan {x}...")
 				role = x
 				break
 
 		for x in role.members:
 			await x.remove_roles(inClan)
 			await x.remove_roles(leader)
-		await ctx.send(f"done! clan had {len(role.members)} members")
+		await ctx.respond(f"done! clan had {len(role.members)} members")
 		await role.delete()
 
-@client.command(aliases=["t"], brief="transfer ownership of a clan")
-async def transfer(ctx, newOwner):
-
-	newOwner = ctx.mentions[0]
-
-	leader:discord.Role = ctx.guild.get_role(865992562364252163)
-	clanBorder:discord.Role = ctx.guild.get_role(865819163087994911)
-
+@clan_group.command(description="transfer ownership of a clan")
+async def transfer(ctx:discord.ApplicationContext, new_owner:discord.Member):
 	if not leader in ctx.author.roles:
+		await ctx.respond("you do not own your clan",ephemeral=True)
 		return
 
-	for x in ctx.guild.roles:
-		if x in ctx.author.roles and x in newOwner.roles and x.position <= clanBorder.position and x.position != 0:
+	for x in guild.roles:
+		if x in ctx.author.roles and x in new_owner.roles and x.position <= clanBorder.position and x.position != 0:
 			clan = x
 			break
 		else:
@@ -135,27 +122,20 @@ async def transfer(ctx, newOwner):
 			break
 		
 	if clan == None:
-		await ctx.send(f"you and {newOwner.display_name} arent in the same clan")
+		await ctx.respond(f"you and {new_owner.display_name} arent in the same clan",ephemeral=True)
 		return
 	else:
 		await ctx.author.remove_roles(leader)
-		await newOwner.add_roles(leader)
-		await ctx.send(f"transfered ownership of {clan.name} to {newOwner.display_name}")
+		await new_owner.add_roles(leader)
+		await ctx.respond(f"transfered ownership of {clan.name} to {new_owner.display_name}",ephemeral=True)
 
-@client.command(aliases=["k"], brief="kick a member from a clan")
-async def kick(ctx, kicked):
-
-	kicked = ctx.message.mentions[0]
-
-	leader:discord.Role = ctx.guild.get_role(865992562364252163)
-	inClan:discord.Role = ctx.guild.get_role(865713278860656661)
-	clanBorder:discord.Role = ctx.guild.get_role(865819163087994911)
-
+@clan_group.command(description="kick a member from a clan")
+async def kick(ctx, kicked:discord.Member):
 	if ctx.author == kicked or not leader in ctx.author.roles:
-		await ctx.send("you down own your clan")
+		await ctx.respond("you don't own your clan",ephemeral=True)
 		return
 
-	for x in ctx.guild.roles:
+	for x in guild.roles:
 		if x in ctx.author.roles and x in kicked.roles and x.position <= clanBorder.position and x.position != 0:
 			clan = x
 			break
@@ -163,103 +143,70 @@ async def kick(ctx, kicked):
 			clan = None
 		
 	if clan == None:
-		await ctx.send(f"you and {kicked.display_name} arent in the same clan")
+		await ctx.respond(f"you and {kicked.display_name} arent in the same clan",ephemeral=True)
 		return
 	else:
 		await kicked.remove_roles(clan)
 		await kicked.remove_roles(inClan)
-		await ctx.send(f"kicked {kicked.display_name} from {clan.name}")
+		await ctx.respond(f"kicked {kicked.display_name} from {clan.name}")
 
-@client.command(aliases=["i"], brief="invite a user to your clan")
-async def invite(ctx, invitee):
-
-	
-	inClan:discord.Role = ctx.guild.get_role(865713278860656661)
-	clanBorder:discord.Role = ctx.guild.get_role(865819163087994911)
-	leader:discord.Role = ctx.guild.get_role(865992562364252163)
-
-	invitee = ctx.message.mentions[0]
-
+@clan_group.command(description="invite a user to your clan")
+async def invite(ctx, invitee:discord.Member):
 	if inClan in invitee.roles:
-		await ctx.send(f"{invitee.display_name} is already in a clan")
+		await ctx.respond(f"{invitee.display_name} is already in a clan",ephemeral=True)
 		return
 	if not leader in ctx.author.roles:
-		await ctx.send("you do not own your clan")
+		await ctx.respond("you do not own your clan",ephemeral=True)
 		return
 
-	for x in ctx.guild.roles:
+	for x in guild.roles:
 		if x in ctx.author.roles and x.position <= clanBorder.position and x.position != 0:
 			invitedTo = x
 	
-	await ctx.send(f"invited {invitee.display_name} to {invitedTo.name}!")
-	message = await invitee.send(f"{ctx.author.mention} invited you to thier guild, {invitedTo.name} do you accept?")
+	await ctx.respond(f"invited {invitee.display_name} to {invitedTo.name}!",ephemeral=True)
+	await invitee.send(f"{ctx.author.mention} invited you to thier guild, {invitedTo.name} do you accept?",view=InviteView(invitedTo,invitee))
 
-	await message.add_reaction('👍')
+	# try:
+	# 	reaction, user = await client.wait_for('reaction_add', timeout=3600, check=check)
+	# except asyncio.TimeoutError:
+	# 	await ctx.author.send(f"{invitee.display_name} didnt accept the invite in time")
+	# 	await invitee.send("invite timed out")
+	# 	return
+	# print("2")
+	# await ctx.author.send(f"{invitee.display_name} accepted the invite")
+	# print("3")
+	# await invitee.send(f"you joined {invitedTo.name}!")
+	# await invitee.add_roles(invitedTo)
+	# await invitee.add_roles(inClan)
 
-	def check(reaction, user):
-		return user == invitee and str(reaction.emoji) == '👍'
-
-	try:
-		reaction, user = await client.wait_for('reaction_add', timeout=3600, check=check)
-	except asyncio.TimeoutError:
-		await ctx.author.send(f"{invitee.display_name} didnt accept the invite in time")
-		await invitee.send("invite timed out")
-		return
-	else:
-		await ctx.author.send(f"{invitee.display_name} accepted the invite")
-		await invitee.send(f"you joined {invitedTo.name}!")
-		await invitee.add_roles(invitedTo)
-		await invitee.add_roles(inClan)
-
-@client.command(aliases=['e'], brief="edit your clan")
-async def edit(ctx, option:extra.EditTypes, *edit):
-
-	leader:discord.Role = ctx.guild.get_role(865992562364252163)
-	inClan:discord.Role = ctx.guild.get_role(865713278860656661)
-	clanBorder:discord.Role = ctx.guild.get_role(865819163087994911)
-
-	for x in ctx.guild.roles:
+@edit_group.command(description="change the name of your clan")
+async def name(ctx:discord.ApplicationContext, name:str):
+	for x in guild.roles:
 		if x in ctx.author.roles and x.position <= clanBorder.position and x.position != 0:
 			clan = x
 			break
-		else:
-			clan = False
+		else: return
 	
+	await clan.edit(name=name)
+	await ctx.respond(f"edited your clan {clan.name} to its new name")
+
+@edit_group.command(description="change the color of your clan")
+async def color(ctx:discord.ApplicationContext,color:discord.Option(str,"color code in hex format")):
+	for x in guild.roles:
+		if x in ctx.author.roles and x.position <= clanBorder.position and x.position != 0:
+			clan = x
+			break
+		else: return
 	
-	if inClan not in ctx.author.roles:
-		await ctx.send("you are not in a clan")
-		return
-	elif leader not in ctx.author.roles:
-		await ctx.send("you do not own the clan you are in")
-		return
-	elif not clan:
-		await ("an error occured this is a bug so guess you are fucked")
-		return
+	rgb_color = discord.Colour(int(color,16))
 	
-	if option == "name":
+	await clan.edit(colour=rgb_color)
+	await ctx.respond(f"edited clan {clan.name} to its new color")
 
-		name = " ".join(edit)
-
-		await clan.edit(name=name)
-		await ctx.send(f"edited your clan {clan.name} to its new name")
-
-	elif option == "color":
-		
-		color = discord.Colour.from_rgb(int(edit[0]), int(edit[1]), int(edit[2]))
-		
-		await clan.edit(colour=color)
-		
-		await ctx.send(f"edited clan {clan.name} to its new color")
-	else:
-		await ctx.send("you need to get a valid option to edit (either color or name)")
-		return
-
-@client.command(aliases=["li"],brief="lists clans")
-async def list(ctx:commands.Context):
-	clanBorder:discord.Role = ctx.guild.get_role(865819163087994911)
-
+@clan_group.command()
+async def list(ctx:discord.ApplicationContext):
 	embed = discord.Embed(title="List of clans")
-	embed.description = "\n".join( [i.mention for i in ctx.guild.roles if i.position < clanBorder.position and i != ctx.guild.default_role and len(i.members) > 0 ] )
-	await ctx.send(embed=embed,allowed_mentions=discord.AllowedMentions.none())
+	embed.description = "\n".join( [i.mention for i in guild.roles if i.position < clanBorder.position and i != guild.default_role and len(i.members) > 0 ] )
+	await ctx.respond(embed=embed,allowed_mentions=discord.AllowedMentions.none(),ephemeral=True)
 
-client.run(config.TOKEN,bot=config.BOT)
+client.run(config.TOKEN)
