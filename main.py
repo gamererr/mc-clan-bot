@@ -17,17 +17,19 @@ edit_group = clan_group.create_subgroup("edit","Modify your clan in certain ways
 guild:discord.Guild = None
 inClan:discord.Role = None
 leader:discord.Role = None
+ignore:discord.Role = None
 clans:discord.CategoryChannel = None
 clanBorder:discord.Role = None
 
 @client.event
 async def on_ready():
 	print(f"logged in as {client.user}")
-	global inClan, leader, clans, clanBorder, guild
+	global inClan, leader, clans, clanBorder, guild, ignore
 	guild = await client.fetch_guild(config.GUILD)
 	inClan = guild.get_role(config.INCLAN)
 	leader = guild.get_role(config.LEADER)
 	clanBorder = guild.get_role(config.CLANBORDER)
+	ignore = guild.get_role(config.IGNORE)
 	clans = await guild.fetch_channel(config.CLANS)
 	print(f"ready!")
 
@@ -160,7 +162,7 @@ async def invite(ctx, invitee:discord.Member):
 		return
 
 	for x in guild.roles:
-		if x in ctx.author.roles and x.position <= clanBorder.position and x.position != 0:
+		if x in ctx.author.roles and x.position <= clanBorder.position and x.position != 0 and x != ignore:
 			invitedTo = x
 	
 	await ctx.respond(f"invited {invitee.display_name} to {invitedTo.name}!",ephemeral=True)

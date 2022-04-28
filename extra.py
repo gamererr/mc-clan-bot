@@ -14,6 +14,7 @@ class config:
 		self.LEADER = int(from_dict['LEADER'])
 		self.CLANS = int(from_dict['CLANS'])
 		self.CLANBORDER = int(from_dict['CLANBORDER'])
+		self.IGNORE = int(from_dict['IGNORE'])
 		self.GUILD = int(from_dict['GUILD'])
 
 
