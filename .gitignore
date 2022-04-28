@@ -1,0 +1,4 @@
+tokenfile
+__pycache__
+.vscode
+.env
